@@ -54,6 +54,7 @@ branch = "master"
 [dependencies.pairing]
 git = "https://github.com/filecoin-project/pairing"
 branch = "master"
+features = ["serde"]
 
 [features]
 default = []
