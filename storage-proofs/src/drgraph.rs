@@ -73,10 +73,6 @@ pub trait Graph<H: Hasher>: ::std::fmt::Debug + Clone + PartialEq + Eq {
 
     /// Builds a merkle tree based on the given data and stores it in `path`
     /// (if set).
-    // FIXME: If the `path` is set to `None` should we still create a temporary
-    //  file somewhere? (at the moment we don't)
-    // FIXME: Check if the path version should be integrated with the original
-    //  (and then we should refactor all the calls to it, leave this for last).
     #[cfg(feature = "disk-trees")]
     fn merkle_tree_path<'a>(
         &self,
