@@ -51,7 +51,8 @@ fn u64_to_fr_safe(sector_id: u64) -> [u8; 31] {
 
 fn make_piece(num_bytes_in_piece: usize) -> (String, Vec<u8>) {
     let mut rng = thread_rng();
-    let bytes = (0..num_bytes_in_piece).map(|_| rng.gen()).collect();
+    // let bytes = (0..num_bytes_in_piece).map(|_| rng.gen()).collect();
+    let bytes = (0..num_bytes_in_piece).map(|_| 'A' as u8).collect();
     let key = (0..16)
         .map(|_| (0x20u8 + (rand::random::<f32>() * 96.0) as u8) as char)
         .collect();
@@ -147,10 +148,10 @@ unsafe fn sector_builder_lifecycle(use_live_store: bool) -> Result<(), Box<Error
                 porep_proof_partitions: 2,
                 post_proof_partitions: 1,
             },
-            max_bytes: 266338304,
-            first_piece_bytes: 26214400,
-            second_piece_bytes: 131072000,
-            third_piece_bytes: 157286400,
+            max_bytes: 1016 * 1024 * 256,
+            first_piece_bytes: 100 * 1024 * 256,
+            second_piece_bytes: 200 * 1024 * 256,
+            third_piece_bytes: 500 * 1024 * 256,
         }
     } else {
         ConfigurableSizes {
@@ -161,8 +162,8 @@ unsafe fn sector_builder_lifecycle(use_live_store: bool) -> Result<(), Box<Error
             },
             max_bytes: 1016,
             first_piece_bytes: 100,
-            second_piece_bytes: 500,
-            third_piece_bytes: 600,
+            second_piece_bytes: 200,
+            third_piece_bytes: 500,
         }
     };
 
@@ -436,6 +437,8 @@ unsafe fn sector_builder_lifecycle(use_live_store: bool) -> Result<(), Box<Error
         bytes_out.set_len(data_len);
         ptr::copy(data_ptr, bytes_out.as_mut_ptr(), data_len);
 
+        println!("{:x?}", bytes_in);
+        println!("{:x?}", bytes_out);
         assert_eq!(format!("{:x?}", bytes_in), format!("{:x?}", bytes_out))
     }
 
