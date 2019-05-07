@@ -1,5 +1,5 @@
 #![deny(clippy::all, clippy::perf, clippy::correctness)]
-#![allow(clippy::unreadable_literal)]
+#![allow(unused_attributes)]
 
 extern crate ffi_toolkit;
 extern crate logging_toolkit;

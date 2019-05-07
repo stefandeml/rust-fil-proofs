@@ -1,9 +1,11 @@
 use std::fs::File;
+use std::io::prelude::*;
 use std::sync::Arc;
 
 use crate::api::sector_builder::errors::*;
-use crate::api::sector_builder::metadata::sum_piece_bytes;
 use crate::api::sector_builder::metadata::StagedSectorMetadata;
+use crate::api::sector_builder::pieces::get_piece_padding;
+use crate::api::sector_builder::pieces::sum_piece_lengths;
 use crate::api::sector_builder::state::StagedState;
 use crate::api::sector_builder::*;
 use crate::error;
@@ -41,17 +43,27 @@ pub fn add_piece(
         .or_else(|_| provision_new_staged_sector(sector_mgr, &mut staged_state))?;
 
     if let Some(s) = staged_state.sectors.get_mut(&dest_sector_id) {
-        let mut file = File::open(piece_path)?;
+        let file = File::open(piece_path)?;
+
+        let sector_length = sum_piece_lengths(s.pieces.iter());
+        let (left_padding, right_padding) = get_piece_padding(sector_length, UnpaddedBytesAmount(piece_bytes_amount));
+
+         let left_padding_vec = vec![0; left_padding.into()];
+         let left_padding_slice = &left_padding_vec[..];
+         let right_padding_vec = vec![0; right_padding.into()];
+         let right_padding_slice = &right_padding_vec[..];
+         let mut chain = left_padding_slice.chain(file).chain(right_padding_slice);
+         let expected_num_bytes_written = left_padding + piece_bytes_len + right_padding;
 
         sector_store
             .inner
             .manager()
-            .write_and_preprocess(&s.sector_access, &mut file)
+            .write_and_preprocess(&s.sector_access, &mut chain)
             .map_err(Into::into)
             .and_then(|num_bytes_written| {
-                if num_bytes_written != piece_bytes_len {
+                if num_bytes_written != expected_num_bytes_written {
                     Err(
-                        err_inc_write(u64::from(num_bytes_written), u64::from(piece_bytes_len))
+                        err_inc_write(u64::from(num_bytes_written), u64::from(expected_num_bytes_written))
                             .into(),
                     )
                 } else {
@@ -62,6 +74,7 @@ pub fn add_piece(
                 s.pieces.push(metadata::PieceMetadata {
                     piece_key,
                     num_bytes: piece_bytes_len,
+                    comm_p: None,
                 });
 
                 sector_id
@@ -84,7 +97,10 @@ fn compute_destination_sector_id(
         Ok(candidate_sectors
             .iter()
             .find(move |staged_sector| {
-                (max_bytes_per_sector - sum_piece_bytes(staged_sector)) >= num_bytes_in_piece
+                let sector_length = sum_piece_lengths(staged_sector.pieces.iter());
+                let (left_padding, right_padding) = get_piece_padding(sector_length, num_bytes_in_piece);
+                (sector_length + left_padding + num_bytes_in_piece + right_padding)
+                    <= max_bytes_per_sector
             })
             .map(|x| x.sector_id))
     }
@@ -128,19 +144,22 @@ mod tests {
 
         sealed_sector_a.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
-            num_bytes: UnpaddedBytesAmount(5),
+            num_bytes: UnpaddedBytesAmount(128),
+            comm_p: None,
         });
 
         sealed_sector_a.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
-            num_bytes: UnpaddedBytesAmount(10),
+            num_bytes: UnpaddedBytesAmount(128),
+            comm_p: None,
         });
 
         let mut sealed_sector_b: StagedSectorMetadata = Default::default();
 
         sealed_sector_b.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
-            num_bytes: UnpaddedBytesAmount(5),
+            num_bytes: UnpaddedBytesAmount(128),
+            comm_p: None,
         });
 
         let staged_sectors = vec![sealed_sector_a.clone(), sealed_sector_b.clone()];
@@ -148,8 +167,8 @@ mod tests {
         // piece takes up all remaining space in first sector
         match compute_destination_sector_id(
             &staged_sectors,
-            UnpaddedBytesAmount(100),
-            UnpaddedBytesAmount(85),
+            UnpaddedBytesAmount(256),
+            UnpaddedBytesAmount(128),
         ) {
             Ok(Some(destination_sector_id)) => {
                 assert_eq!(destination_sector_id, sealed_sector_a.sector_id)
@@ -160,8 +179,8 @@ mod tests {
         // piece doesn't fit into the first, but does the second
         match compute_destination_sector_id(
             &staged_sectors,
-            UnpaddedBytesAmount(100),
-            UnpaddedBytesAmount(90),
+            UnpaddedBytesAmount(256),
+            UnpaddedBytesAmount(128),
         ) {
             Ok(Some(destination_sector_id)) => {
                 assert_eq!(destination_sector_id, sealed_sector_b.sector_id)
@@ -172,8 +191,8 @@ mod tests {
         // piece doesn't fit into any in the list
         match compute_destination_sector_id(
             &staged_sectors,
-            UnpaddedBytesAmount(100),
-            UnpaddedBytesAmount(100),
+            UnpaddedBytesAmount(256),
+            UnpaddedBytesAmount(256),
         ) {
             Ok(None) => (),
             _ => panic!(),
@@ -182,8 +201,8 @@ mod tests {
         // piece is over max
         match compute_destination_sector_id(
             &staged_sectors,
-            UnpaddedBytesAmount(100),
-            UnpaddedBytesAmount(101),
+            UnpaddedBytesAmount(256),
+            UnpaddedBytesAmount(257),
         ) {
             Err(_) => (),
             _ => panic!(),

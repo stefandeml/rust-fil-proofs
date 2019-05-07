@@ -80,7 +80,7 @@ fn compute_piece_commitment<H: Hasher>(data: &[H::Domain]) -> H::Domain {
 
 #[allow(dead_code)]
 /// Generate `comm_p` from bytes
-fn generate_piece_commitment<H: Hasher>(data: &[u8]) -> Result<H::Domain> {
+pub fn generate_piece_commitment<H: Hasher>(data: &[u8]) -> Result<H::Domain> {
     let mut domain_data = Vec::new();
     for d in data.chunks(32) {
         domain_data.push(<H::Domain as Domain>::try_from_bytes(d)?)

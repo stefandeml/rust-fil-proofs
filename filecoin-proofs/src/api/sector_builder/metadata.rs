@@ -29,6 +29,7 @@ pub struct SealedSectorMetadata {
 pub struct PieceMetadata {
     pub piece_key: String,
     pub num_bytes: UnpaddedBytesAmount,
+    pub comm_p: Option<[u8; 32]>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -80,12 +81,6 @@ impl Default for SealedSectorMetadata {
             proof: Default::default(),
         }
     }
-}
-
-pub fn sum_piece_bytes(s: &StagedSectorMetadata) -> UnpaddedBytesAmount {
-    s.pieces
-        .iter()
-        .fold(UnpaddedBytesAmount(0), |acc, x| acc + x.num_bytes)
 }
 
 pub fn sector_id_as_bytes(sector_id: SectorId) -> error::Result<[u8; 31]> {
