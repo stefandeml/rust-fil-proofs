@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{copy, remove_file, File, OpenOptions};
-use std::io::{BufWriter, Read};
+use std::io::prelude::*;
+use std::io::{BufWriter, Read, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +13,7 @@ use pairing::Engine;
 use sapling_crypto::jubjub::JubjubBls12;
 
 use crate::api::post_adapter::*;
+use crate::api::sector_builder::pieces::get_piece_padding;
 use crate::error;
 use crate::error::ExpectWithBacktrace;
 use crate::FCP_LOG;
@@ -33,6 +35,7 @@ use storage_proofs::hasher::pedersen::{PedersenDomain, PedersenHasher};
 use storage_proofs::hasher::{Domain, Hasher};
 use storage_proofs::layered_drgporep::{self, ChallengeRequirements, LayerChallenges};
 use storage_proofs::merkle::MerkleTree;
+use storage_proofs::piece_inclusion_proof::generate_piece_commitment;
 use storage_proofs::porep::{replica_id, PoRep, Tau};
 use storage_proofs::proof::{NoRequirements, ProofScheme};
 use storage_proofs::vdf_post::{self, VDFPoSt};
@@ -492,6 +495,7 @@ pub struct SealOutput {
     pub comm_r: Commitment,
     pub comm_r_star: Commitment,
     pub comm_d: Commitment,
+    pub comm_ps: Vec<Commitment>,
     pub proof: Vec<u8>,
 }
 
@@ -524,6 +528,7 @@ pub fn seal<T: Into<PathBuf> + AsRef<Path>>(
     out_path: T,
     prover_id_in: &FrSafe,
     sector_id_in: &FrSafe,
+    piece_lengths: Vec<u64>,
 ) -> error::Result<SealOutput> {
     let sector_bytes = usize::from(PaddedBytesAmount::from(porep_config));
 
@@ -601,6 +606,24 @@ pub fn seal<T: Into<PathBuf> + AsRef<Path>>(
     let comm_d = commitment_from_fr::<Bls12>(public_tau.comm_d.into());
     let comm_r_star = commitment_from_fr::<Bls12>(tau.comm_r_star.into());
 
+    let mut cursor = 0;
+    let mut file = OpenOptions::new().read(true).open(in_path)?;
+
+    let comm_ps = piece_lengths
+        .iter()
+        .map(|&piece_length| {
+            let mut buf = vec![0; piece_length as usize];
+            let (left_padding, right_padding) = get_piece_padding(UnpaddedBytesAmount(cursor), UnpaddedBytesAmount(piece_length));
+            file.seek(SeekFrom::Start(cursor + u64::from(left_padding)))?;
+            file.read_exact(buf.as_mut_slice())?;
+            let comm_p = generate_piece_commitment::<PedersenHasher>(&buf)?;
+            let mut comm_p_bytes = [0u8; 32];
+            comm_p.write_bytes(&mut comm_p_bytes)?;
+            cursor = cursor + u64::from(left_padding + UnpaddedBytesAmount(piece_length) + right_padding);
+            Ok(comm_p_bytes)
+        })
+        .collect::<error::Result<Vec<[u8; 32]>>>()?;
+
     // Verification is cheap when parameters are cached,
     // and it is never correct to return a proof which does not verify.
     verify_seal(
@@ -619,6 +642,7 @@ pub fn seal<T: Into<PathBuf> + AsRef<Path>>(
         comm_r_star,
         comm_d,
         proof: buf,
+        comm_ps,
     })
 }
 
@@ -823,6 +847,7 @@ mod tests {
             &sealed_access,
             &prover_id,
             &sector_id,
+            vec![],
         )
         .expect("failed to seal");
 
@@ -830,6 +855,7 @@ mod tests {
             comm_r,
             comm_d,
             comm_r_star,
+            comm_ps,
             proof,
         } = seal_output.clone();
 

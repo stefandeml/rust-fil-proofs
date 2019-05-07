@@ -160,9 +160,9 @@ unsafe fn sector_builder_lifecycle(use_live_store: bool) -> Result<(), Box<Error
                 post_proof_partitions: 1,
             },
             max_bytes: 1016,
-            first_piece_bytes: 100,
-            second_piece_bytes: 500,
-            third_piece_bytes: 600,
+            first_piece_bytes: 150,
+            second_piece_bytes: 200,
+            third_piece_bytes: 500,
         }
     };
 
