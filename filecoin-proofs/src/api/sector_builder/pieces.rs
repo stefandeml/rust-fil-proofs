@@ -68,10 +68,10 @@ pub fn get_piece_alignment(
     }
 }
 
-pub fn file_with_piece_alignment<'a>(
-    source: &'a mut Read,
+pub fn with_alignment(
+    source: impl Read,
     piece_alignment: PieceAlignment,
-) -> impl Read + 'a { 
+) -> impl Read {
     let PieceAlignment {
         left_bytes,
         right_bytes,
@@ -81,6 +81,21 @@ pub fn file_with_piece_alignment<'a>(
     let right_padding = Cursor::new(vec![0; right_bytes.into()]);
 
     left_padding.chain(source).chain(right_padding)
+}
+
+pub fn get_aligned_source(
+    source: impl Read,
+    pieces: &[PieceMetadata],
+    piece_bytes: UnpaddedBytesAmount,
+) -> (UnpaddedBytesAmount, impl Read) {
+    let written_bytes = sum_piece_bytes_with_alignment(pieces.iter());
+    let piece_alignment = get_piece_alignment(written_bytes, piece_bytes);
+    let expected_num_bytes_written = piece_alignment.left_bytes + piece_bytes + piece_alignment.right_bytes;
+
+    (
+        expected_num_bytes_written,
+        with_alignment(source, piece_alignment),
+    )
 }
 
 #[cfg(test)]

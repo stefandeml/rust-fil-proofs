@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::api::sector_builder::errors::*;
 use crate::api::sector_builder::metadata::StagedSectorMetadata;
 use crate::api::sector_builder::pieces::{
-    get_piece_alignment, sum_piece_bytes_with_alignment, PieceAlignment, file_with_piece_alignment
+    get_piece_alignment, sum_piece_bytes_with_alignment, PieceAlignment, get_aligned_source
 };
 use crate::api::sector_builder::state::StagedState;
 use crate::api::sector_builder::*;
@@ -43,13 +43,10 @@ pub fn add_piece(
         .or_else(|_| provision_new_staged_sector(sector_mgr, &mut staged_state))?;
 
     if let Some(s) = staged_state.sectors.get_mut(&dest_sector_id) {
-        let mut file = File::open(piece_path)?;
-
-        let preceding_piece_bytes = sum_piece_bytes_with_alignment(s.pieces.iter());
-        let piece_alignment = get_piece_alignment(preceding_piece_bytes, piece_bytes_len);
-        let expected_num_bytes_written = piece_alignment.left_bytes + piece_bytes_len + piece_alignment.right_bytes;
-
-        let mut chain = file_with_piece_alignment(&mut file, piece_alignment);
+        let (
+            expected_num_bytes_written,
+            mut chain,
+        ) = get_aligned_source(File::open(piece_path)?, &s.pieces, piece_bytes_len);
 
         sector_store
             .inner
