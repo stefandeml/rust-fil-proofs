@@ -64,6 +64,7 @@ mod tests {
                     vec![PieceMetadata {
                         piece_key: format!("{}", sector_id),
                         num_bytes: UnpaddedBytesAmount(num_bytes),
+                        comm_p: None,
                     }]
                 } else {
                     vec![]

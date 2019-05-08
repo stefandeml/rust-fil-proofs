@@ -134,16 +134,19 @@ mod tests {
         let piece_a = PieceMetadata {
             piece_key: String::from("a"),
             num_bytes: UnpaddedBytesAmount(31),
+            comm_p: None,
         };
 
         let piece_b = PieceMetadata {
             piece_key: String::from("b"),
             num_bytes: UnpaddedBytesAmount(32),
+            comm_p: None,
         };
 
         let piece_c = PieceMetadata {
             piece_key: String::from("c"),
             num_bytes: UnpaddedBytesAmount(33),
+            comm_p: None,
         };
 
         pieces.push(piece_a);

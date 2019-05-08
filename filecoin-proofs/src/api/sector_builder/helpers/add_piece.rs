@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::sync::Arc;
+use std::iter::Iterator;
 
 use crate::api::sector_builder::errors::*;
 use crate::api::sector_builder::metadata::StagedSectorMetadata;
@@ -28,14 +29,14 @@ pub fn add_piece(
     let piece_bytes_len = UnpaddedBytesAmount(piece_bytes_amount);
 
     let opt_dest_sector_id = {
-        let candidates: Vec<StagedSectorMetadata> = staged_state
+        let mut candidates: Vec<StagedSectorMetadata> = staged_state
             .sectors
             .iter()
             .filter(|(_, v)| v.seal_status == SealStatus::Pending)
             .map(|(_, v)| (*v).clone())
             .collect();
 
-        compute_destination_sector_id(&candidates[..], sector_max, piece_bytes_len)?
+        compute_destination_sector_id(&candidates, sector_max, piece_bytes_len)?
     };
 
     let dest_sector_id = opt_dest_sector_id
@@ -67,6 +68,7 @@ pub fn add_piece(
                 s.pieces.push(metadata::PieceMetadata {
                     piece_key,
                     num_bytes: piece_bytes_len,
+                    comm_p: None,
                 });
 
                 sector_id
@@ -86,7 +88,10 @@ fn compute_destination_sector_id(
     if num_bytes_in_piece > max_bytes_per_sector {
         Err(err_overflow(num_bytes_in_piece.into(), max_bytes_per_sector.into()).into())
     } else {
-        Ok(candidate_sectors
+        let mut vector = candidate_sectors.to_vec();
+        vector.sort_by(|a, b| a.sector_id.cmp(&b.sector_id));
+
+        Ok(vector
             .iter()
             .find(move |staged_sector| {
                 let preceding_piece_bytes =
@@ -141,11 +146,13 @@ mod tests {
         sealed_sector_a.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
             num_bytes: UnpaddedBytesAmount(508),
+            comm_p: None,
         });
 
         sealed_sector_a.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
             num_bytes: UnpaddedBytesAmount(254),
+            comm_p: None,
         });
 
         let mut sealed_sector_b: StagedSectorMetadata = Default::default();
@@ -153,6 +160,7 @@ mod tests {
         sealed_sector_b.pieces.push(PieceMetadata {
             piece_key: String::from("x"),
             num_bytes: UnpaddedBytesAmount(508),
+            comm_p: None,
         });
 
         let staged_sectors = vec![sealed_sector_a.clone(), sealed_sector_b.clone()];

@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use merkle_light::hash::Algorithm;
 use merkle_light::merkle::{self, next_pow2, VecStore};
+use std::io::Read;
 
 use crate::error::*;
 use crate::fr32::Fr32Vec;
@@ -95,6 +96,27 @@ fn generate_piece_commitment_bytes<H: Hasher>(data: &[u8]) -> Result<Fr32Vec> {
     let comm_p = generate_piece_commitment::<H>(data)?;
 
     Ok(H::Domain::into_bytes(&comm_p))
+}
+
+pub fn generate_piece_commitment_bytes_from_source<H: Hasher, R: Read>(source: &mut R) -> Result<[u8; 32]> {
+    let mut domain_data = Vec::new();
+
+    loop {
+        let mut buffer = [0; 32];
+        let bytes = source.read(&mut buffer)?;
+
+        if bytes == 0 {
+            break;
+        }
+
+        domain_data.push(<H::Domain as Domain>::try_from_bytes(&buffer)?)
+    }
+
+    let comm_p = compute_piece_commitment::<H>(&domain_data);
+    let mut comm_p_bytes = [0u8; 32];
+    comm_p.write_bytes(&mut comm_p_bytes)?;
+
+    Ok(comm_p_bytes)
 }
 
 pub fn piece_inclusion_proofs<H: Hasher>(
