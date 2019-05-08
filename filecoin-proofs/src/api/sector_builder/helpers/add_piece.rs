@@ -45,9 +45,8 @@ pub fn add_piece(
     if let Some(s) = staged_state.sectors.get_mut(&dest_sector_id) {
         let file = File::open(piece_path)?;
 
-        let flarp = sum_piece_lengths(s.pieces.iter());
-        let (left_padding, right_padding) = get_piece_padding(flarp, piece_bytes_len);
-        println!("{:?}, {:?}, {:?}", flarp, left_padding, right_padding);
+        let piece_lengths = sum_piece_lengths(s.pieces.iter());
+        let (left_padding, right_padding) = get_piece_padding(piece_lengths, piece_bytes_len);
 
         let left_padding_vec = vec![0; left_padding.into()];
         let left_padding_slice = &left_padding_vec[..];
@@ -98,9 +97,9 @@ fn compute_destination_sector_id(
         Ok(candidate_sectors
             .iter()
             .find(move |staged_sector| {
-                let flarp = sum_piece_lengths(staged_sector.pieces.iter());
-                let (left_padding, right_padding) = get_piece_padding(flarp, num_bytes_in_piece);
-                flarp + left_padding + num_bytes_in_piece + right_padding <= max_bytes_per_sector
+                let piece_lengths = sum_piece_lengths(staged_sector.pieces.iter());
+                let (left_padding, right_padding) = get_piece_padding(piece_lengths, num_bytes_in_piece);
+                piece_lengths + left_padding + num_bytes_in_piece + right_padding <= max_bytes_per_sector
             })
             .map(|x| x.sector_id))
     }

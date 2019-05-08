@@ -1,7 +1,6 @@
 use crate::api::sector_builder::metadata::PieceMetadata;
 use sector_base::api::bytes_amount::UnpaddedBytesAmount;
 use std::cmp::max;
-use std::io::{Chain, Read};
 
 pub type PiecePadding = (UnpaddedBytesAmount, UnpaddedBytesAmount);
 
@@ -19,15 +18,11 @@ pub fn get_piece_by_key<'a>(
     pieces.iter().find(|p| p.piece_key == piece_key)
 }
 
-pub fn get_piece_start(pieces: &[PieceMetadata], piece_key: &str) -> Option<UnpaddedBytesAmount> {
-    if let Some(piece) = get_piece_by_key(pieces, piece_key) {
-        let last_byte = sum_piece_lengths(pieces.iter().take_while(|p| p.piece_key != piece_key));
-        let (left_padding, _) = get_piece_padding(last_byte, piece.num_bytes);
+pub fn get_piece_start(pieces: &[PieceMetadata], piece: &PieceMetadata) -> u64 {
+    let last_byte = sum_piece_lengths(pieces.iter().take_while(|p| p.piece_key != piece.piece_key));
+    let (left_padding, _) = get_piece_padding(last_byte, piece.num_bytes);
 
-        Some(last_byte + left_padding)
-    } else {
-        None
-    }
+    u64::from(last_byte + left_padding)
 }
 
 pub fn get_piece_padding(written_bytes: UnpaddedBytesAmount, piece_bytes: UnpaddedBytesAmount) -> PiecePadding {
